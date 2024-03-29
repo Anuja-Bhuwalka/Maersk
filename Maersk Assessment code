@@ -1,0 +1,60 @@
+import simpy
+import random
+
+
+class ContainerTerminal:
+    def __init__(self, env):
+        self.env = env
+        self.berths = simpy.Resource(env, capacity=2)  # Two available berths
+        self.cranes = simpy.Resource(env, capacity=2)  # Two quay cranes
+        self.trucks = simpy.Resource(env, capacity=3)  # Three trucks
+
+    def vessel_arrival(self, vessel):
+        print(f"Time {self.env.now}: Vessel {vessel} arrives at the terminal.")
+        with self.berths.request() as request:
+            yield request
+            print(f"Time {self.env.now}: Vessel {vessel} berths at the terminal.")
+
+            # Discharging containers
+            yield self.env.timeout(random.randint(120, 180))  # Assuming 120-180 minutes to discharge 150 containers
+            print(f"Time {self.env.now}: Vessel {vessel} has been discharged.")
+
+    def quay_crane_operation(self, crane, vessel):
+        print(f"Time {self.env.now}: Quay Crane {crane} starts operating on Vessel {vessel}.")
+        with self.cranes.request() as request:
+            yield request
+            print(f"Time {self.env.now}: Quay Crane {crane} is lifting containers from Vessel {vessel}.")
+
+            # Move containers to trucks
+            yield self.env.timeout(3)  # Assuming 3 minutes per container movement
+            print(f"Time {self.env.now}: Quay Crane {crane} has moved containers from Vessel {vessel} to truck.")
+
+    def truck_operation(self, truck):
+        print(f"Time {self.env.now}: Truck {truck} starts transporting containers.")
+        with self.trucks.request() as request:
+            yield request
+            print(f"Time {self.env.now}: Truck {truck} has delivered containers to the yard block.")
+
+            # Return to the terminal
+            yield self.env.timeout(6)  # Assuming 6 minutes for round trip
+            print(f"Time {self.env.now}: Truck {truck} has returned to the terminal.")
+
+
+def vessel_generator(env, container_terminal):
+    vessel_id = 1
+    while True:
+        yield env.timeout(random.expovariate(1/300))  # Exponential distribution with mean 5 hours
+        env.process(container_terminal.vessel_arrival(vessel_id))
+        vessel_id += 1
+
+
+def run_simulation(simulation_time):
+    env = simpy.Environment()
+    container_terminal = ContainerTerminal(env)
+    env.process(vessel_generator(env, container_terminal))
+    env.run(until=simulation_time)
+
+
+if __name__ == "__main__":
+    simulation_time = 720  # 720 ticks = 720 minutes = 12 hours
+    run_simulation(simulation_time)
